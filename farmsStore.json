@@ -1,0 +1,16 @@
+{
+  "farms": {
+    "besc-xrp": {
+      "totalStaked": 0,
+      "rewardPerTokenStored": 0,
+      "lastUpdate": 1767296028937,
+      "users": {
+        "rnJb53RiGMw3GW2QFk7G3iC8ATiNNGZRT9": {
+          "balance": 0,
+          "rewards": 0,
+          "rewardPerTokenPaid": 0
+        }
+      }
+    }
+  }
+}
