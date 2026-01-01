@@ -4,7 +4,8 @@ const DATABASE_URL = process.env.DATABASE_URL || ''
 const DATABASE_SSL = process.env.DATABASE_SSL === 'true'
 const PGSSLMODE = process.env.PGSSLMODE || ''
 
-const useSsl = DATABASE_SSL || PGSSLMODE === 'require'
+const urlHasSslMode = DATABASE_URL.includes('sslmode=require')
+const useSsl = DATABASE_SSL || PGSSLMODE === 'require' || urlHasSslMode
 
 const pool = DATABASE_URL
   ? new Pool({
