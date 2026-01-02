@@ -13,8 +13,28 @@ const RIPPLE_DATA_BASE = process.env.RIPPLE_DATA_API_BASE || 'https://data.rippl
 const app = express()
 app.set('etag', false)
 
+const normalizeOrigin = (value = '') => value.trim().replace(/\/$/, '')
+
+const parseAllowedOrigins = (value) => {
+  if (!value) return ['*']
+  return value
+    .split(',')
+    .map((entry) => normalizeOrigin(entry))
+    .filter(Boolean)
+}
+
+const allowedOrigins = parseAllowedOrigins(ALLOW_ORIGIN)
+
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN)
+  const requestOrigin = normalizeOrigin(req.headers.origin || '')
+  const allowAll = allowedOrigins.includes('*')
+  if (allowAll) {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+  } else if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin)
+  } else if (allowedOrigins[0]) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0])
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Cache-Control', 'no-store')
