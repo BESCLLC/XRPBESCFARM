@@ -1,4 +1,5 @@
 const express = require('express')
+const fetch = require('node-fetch')
 const dotenv = require('dotenv')
 const { mountFarmsApi } = require('./farmsApi')
 const { initDb, isDbEnabled } = require('./db')
@@ -7,6 +8,7 @@ dotenv.config()
 
 const PORT = Number(process.env.PORT || 3001)
 const ALLOW_ORIGIN = process.env.FARMS_ALLOW_ORIGIN || process.env.CORS_ALLOW_ORIGIN || '*'
+const RIPPLE_DATA_BASE = process.env.RIPPLE_DATA_API_BASE || 'https://data.ripple.com/v2'
 
 const app = express()
 
@@ -23,6 +25,19 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok' })
+})
+
+app.get('/ripple-data/v2/*', async (req, res) => {
+  try {
+    const targetPath = req.originalUrl.replace(/^\/ripple-data\/v2/, '')
+    const response = await fetch(`${RIPPLE_DATA_BASE}${targetPath}`)
+    const text = await response.text()
+    res.status(response.status)
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json')
+    res.send(text)
+  } catch (error) {
+    res.status(502).json({ error: 'Failed to fetch ripple-data' })
+  }
 })
 
 mountFarmsApi(app)
