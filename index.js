@@ -11,11 +11,13 @@ const ALLOW_ORIGIN = process.env.FARMS_ALLOW_ORIGIN || process.env.CORS_ALLOW_OR
 const RIPPLE_DATA_BASE = process.env.RIPPLE_DATA_API_BASE || 'https://data.ripple.com/v2'
 
 const app = express()
+app.set('etag', false)
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN)
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Cache-Control', 'no-store')
   if (req.method === 'OPTIONS') {
     res.status(200).send('')
     return
