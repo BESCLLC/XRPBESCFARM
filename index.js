@@ -119,6 +119,22 @@ const forwardJsonResponse = async (
       return
     }
   }
+  if (response.status === 429 && cacheKey) {
+    const stale = getCachedResponse(cacheKey, { allowStale: true })
+    if (stale) {
+      cacheResponse(
+        cacheKey,
+        stale.body,
+        stale.status,
+        stale.contentType,
+        cacheTtl,
+      )
+      res.status(stale.status)
+      res.setHeader('Content-Type', stale.contentType)
+      res.send(stale.body)
+      return
+    }
+  }
 
   res.status(response.status)
   res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json')
@@ -154,9 +170,9 @@ app.get('/bithomp/api/v2/*', async (req, res) => {
     const cacheKey = `bithomp:${targetPath}`
     let cacheTtl = 0
     if (targetPath.includes('trustlines/tokens')) {
-      cacheTtl = 30 * 1000
+      cacheTtl = 5 * 60 * 1000
     } else if (targetPath.includes('amms/search')) {
-      cacheTtl = 60 * 1000
+      cacheTtl = 5 * 60 * 1000
     }
     await forwardJsonResponse(
       `${BITHOMP_BASE}${targetPath}`,
