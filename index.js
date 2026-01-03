@@ -53,7 +53,39 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok' })
 })
 
-const forwardJsonResponse = async (targetUrl, req, res, headers = {}) => {
+const cacheStore = new Map()
+
+const getCachedResponse = (key) => {
+  const entry = cacheStore.get(key)
+  if (!entry) return null
+  if (entry.expiresAt < Date.now()) {
+    cacheStore.delete(key)
+    return null
+  }
+  return entry
+}
+
+const cacheResponse = (key, data, status, contentType, ttlMs) => {
+  if (!ttlMs || ttlMs <= 0) return
+  cacheStore.set(key, {
+    expiresAt: Date.now() + ttlMs,
+    body: data,
+    status,
+    contentType,
+  })
+}
+
+const forwardJsonResponse = async (targetUrl, req, res, headers = {}, cacheKey, cacheTtl) => {
+  if (cacheKey) {
+    const cached = getCachedResponse(cacheKey)
+    if (cached) {
+      res.status(cached.status)
+      res.setHeader('Content-Type', cached.contentType)
+      res.send(cached.body)
+      return
+    }
+  }
+
   const response = await fetch(targetUrl, {
     method: 'GET',
     headers: {
@@ -66,6 +98,10 @@ const forwardJsonResponse = async (targetUrl, req, res, headers = {}) => {
   res.status(response.status)
   res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json')
   res.send(text)
+
+  if (cacheKey && response.ok) {
+    cacheResponse(cacheKey, text, response.status, response.headers.get('content-type') || 'application/json', cacheTtl)
+  }
 }
 
 app.get('/ripple-data/v2/*', async (req, res) => {
@@ -84,7 +120,14 @@ app.get('/bithomp/api/v2/*', async (req, res) => {
     if (BITHOMP_API_KEY) {
       headers[BITHOMP_API_KEY_HEADER] = BITHOMP_API_KEY
     }
-    await forwardJsonResponse(`${BITHOMP_BASE}${targetPath}`, req, res, headers)
+    const cacheKey = `bithomp:${targetPath}`
+    let cacheTtl = 0
+    if (targetPath.includes('trustlines/tokens')) {
+      cacheTtl = 30 * 1000
+    } else if (targetPath.includes('amms/search')) {
+      cacheTtl = 60 * 1000
+    }
+    await forwardJsonResponse(`${BITHOMP_BASE}${targetPath}`, req, res, headers, cacheKey, cacheTtl)
   } catch (error) {
     res.status(502).json({ error: 'Failed to fetch bithomp data' })
   }
