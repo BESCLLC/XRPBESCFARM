@@ -55,27 +55,41 @@ app.get('/', (req, res) => {
 
 const cacheStore = new Map()
 
-const getCachedResponse = (key) => {
+const getCachedResponse = (key, { allowStale = false } = {}) => {
   const entry = cacheStore.get(key)
   if (!entry) return null
-  if (entry.expiresAt < Date.now()) {
-    cacheStore.delete(key)
-    return null
+  const now = Date.now()
+  if (entry.expiresAt > now) {
+    return entry
   }
-  return entry
+  if (allowStale && entry.staleUntil > now) {
+    return entry
+  }
+  cacheStore.delete(key)
+  return null
 }
 
-const cacheResponse = (key, data, status, contentType, ttlMs) => {
+const cacheResponse = (key, data, status, contentType, ttlMs, staleMultiplier = 2) => {
   if (!ttlMs || ttlMs <= 0) return
+  const now = Date.now()
   cacheStore.set(key, {
-    expiresAt: Date.now() + ttlMs,
+    expiresAt: now + ttlMs,
+    staleUntil: now + ttlMs * staleMultiplier,
     body: data,
     status,
     contentType,
   })
 }
 
-const forwardJsonResponse = async (targetUrl, req, res, headers = {}, cacheKey, cacheTtl) => {
+const forwardJsonResponse = async (
+  targetUrl,
+  req,
+  res,
+  headers = {},
+  cacheKey,
+  cacheTtl,
+  { allowStaleOnError = false } = {},
+) => {
   if (cacheKey) {
     const cached = getCachedResponse(cacheKey)
     if (cached) {
@@ -95,12 +109,29 @@ const forwardJsonResponse = async (targetUrl, req, res, headers = {}, cacheKey, 
     },
   })
   const text = await response.text()
+
+  if (!response.ok && cacheKey && allowStaleOnError) {
+    const stale = getCachedResponse(cacheKey, { allowStale: true })
+    if (stale) {
+      res.status(stale.status)
+      res.setHeader('Content-Type', stale.contentType)
+      res.send(stale.body)
+      return
+    }
+  }
+
   res.status(response.status)
   res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json')
   res.send(text)
 
   if (cacheKey && response.ok) {
-    cacheResponse(cacheKey, text, response.status, response.headers.get('content-type') || 'application/json', cacheTtl)
+    cacheResponse(
+      cacheKey,
+      text,
+      response.status,
+      response.headers.get('content-type') || 'application/json',
+      cacheTtl,
+    )
   }
 }
 
@@ -127,7 +158,15 @@ app.get('/bithomp/api/v2/*', async (req, res) => {
     } else if (targetPath.includes('amms/search')) {
       cacheTtl = 60 * 1000
     }
-    await forwardJsonResponse(`${BITHOMP_BASE}${targetPath}`, req, res, headers, cacheKey, cacheTtl)
+    await forwardJsonResponse(
+      `${BITHOMP_BASE}${targetPath}`,
+      req,
+      res,
+      headers,
+      cacheKey,
+      cacheTtl,
+      { allowStaleOnError: true },
+    )
   } catch (error) {
     res.status(502).json({ error: 'Failed to fetch bithomp data' })
   }
